@@ -272,6 +272,64 @@
       (CommonOps/extractDiag m d)
       d))
 
+  ;; TODO: understand what assign-array! should do and implement it too
+  mp/PAssignment
+  (assign! [m v]
+    (if (api/scalar? v)
+      (mp/fill! m v)
+      (unsupported-error "non-scalar assignment")))
+
+  mp/PMutableFill
+  (fill! [m v]
+    (CommonOps/fill m (double v))
+    m)
+
+  mp/PDoubleArrayOutput
+  (to-double-array [m]
+    (.data m))
+  (as-double-array [m]
+    (.data m))
+
+  mp/PMatrixEquality
+  (matrix-equals [a b]
+    (let [b       (api/coerce a b)
+          a-shape (api/shape a)
+          b-shape (api/shape b)
+          a-seq   (ejml-submatrix-seq a (range (first a-shape)) (range (second a-shape)))
+          b-seq   (ejml-submatrix-seq b (range (first b-shape)) (range (second b-shape)))]
+      (and (= a-shape b-shape)
+           (every? #(apply == %) (map list a-seq b-seq)))))
+
+
+  mp/PMatrixMultiply
+  (matrix-multiply [m a]
+    (let [a (api/coerce m a)
+          msh (api/shape m)
+          ash (api/shape a)
+          compatible-dims? (and (= 2 (count msh) (count ash))
+                                (= (last msh) (first ash)))]
+      (cond
+       (api/scalar? a)   (api/scale m a)
+       compatible-dims?  (let [r (new-ejml-matrix (first msh) (last ash))]
+                           (CommonOps/mult m a r)
+                           r)
+       :else             (arg-error "incompatible dimensions for matrix-multiply: "
+                                    msh " x " ash))))
+  (element-multiply [m a]
+    (let [a (api/coerce m a)
+          msh (api/shape m)
+          ash (api/shape a)
+          same-dims? (= msh ash)]
+      (cond
+       (api/scalar? a)  (api/scale m a)
+       same-dims?       (let [r (apply new-ejml-matrix msh)]
+                          (CommonOps/elementMult m a r)
+                          r)
+       :else            (arg-error "incompatible dimensions for element-multiply: "
+                                   msh " x " ash))))
+
+
+
 )
 
 (mpi/register-implementation (new-ejml-matrix 2 2))
