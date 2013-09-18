@@ -208,8 +208,32 @@
   mp/PSliceSeq
   (get-major-slice-seq [m]
     (for [row (range (second (api/shape m)))]
-      (api/get-row m row))))
+      (api/get-row m row)))
 
-)
+
+  ;; TODO: suggest a variadic (join) in matrix-api to avoid multiple allocations
+  mp/PSliceJoin
+  (join [m a]
+    (let [m-shape (api/shape m)
+          a-shape (api/shape a)]
+      (cond
+       (= (rest m-shape) a-shape)  ;; joining with a 1D row vector
+       (let [m2 (api/clone m)
+             arr2 (double-array (concat (.data m2) (api/eseq a)))
+             [mrows mcols] m-shape]
+         (.setData m2 arr2)
+         (.reshape m2 (+ 1 mrows) mcols true)
+         m2)
+       (= (rest m-shape) (rest a-shape))  ;; joining rows
+       (let [m2 (api/clone m)
+             arr2 (double-array (concat (.data m2) (api/eseq a)))
+             [mrows mcols] m-shape
+             [arows _]     a-shape]
+         (.setData m2 arr2)
+         (.reshape m2 (+ mrows arows) mcols true)
+         m2)
+       :else (throw (IllegalArgumentException.
+                     (str "joining matrices of incompatible shape: "
+                          m-shape " and " a-shape)))))))
 
 (mpi/register-implementation (new-ejml-matrix 2 2))
