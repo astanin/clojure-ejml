@@ -253,6 +253,15 @@
          m2)
        :else (throw (IllegalArgumentException.
                      (str "joining matrices of incompatible shape: "
-                          m-shape " and " a-shape)))))))
+                          m-shape " and " a-shape))))))
+
+  mp/PMatrixSubComponents
+  (main-diagonal [m]
+    (let [[r c] (api/shape m)
+          d (new-ejml-matrix (min r c) 1)]
+      (CommonOps/extractDiag m d)
+      d))
+
+)
 
 (mpi/register-implementation (new-ejml-matrix 2 2))
