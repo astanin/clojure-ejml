@@ -64,6 +64,16 @@
       (.next m-iter))))
 
 
+(defmacro arg-error
+  [& message-parts]
+  `(throw (IllegalArgumentException. (str ~@message-parts))))
+
+
+(defmacro unsupported-error
+  [& message-parts]
+  `(throw (UnsupportedOperationException. (str ~@message-parts))))
+
+
 (extend-type DenseMatrix64F
 
   mp/PImplementation
@@ -154,8 +164,9 @@
         1 (->> p api/to-nested-vectors (mapv vector) to-ejml-matrix)
         ;; create a normal matrix otherwise
         2 (->> p api/to-nested-vectors to-ejml-matrix)
-        (throw (IllegalArgumentException. "EJML supports only 2D matrices")))))
+        (arg-error "EJML supports only 2D matrices, but params' shape is " (api/shape p)))))
 
+  ;; TODO: implement broadcasting
   ;; mp/PBroadcast
   ;; (broadcast [m target-shape])
 
@@ -173,8 +184,8 @@
   (reshape [m new-shape]
     ;; EJML can pad with zeros, but PReshaping/reshape should throw an exception
     (when (> (apply * new-shape) (apply * (api/shape m)))
-      (throw (IllegalArgumentException.
-              "new shape requires more elements than the original shape")))
+      (arg-error "new shape " new-shape
+                 " requires more elements than the original shape " (api/shape m)))
     ;; or should return a new mutable copy
     (let [[rows cols] new-shape
           mcopy (api/clone m)]
@@ -203,7 +214,7 @@
     (condp = dimension
       0 (mp/get-row m i)
       1 (mp/get-column m i)
-      (throw (UnsupportedOperationException. "EJML supports only 2D matrices"))))
+      (unsupported-error "EJML supports only 2D matrices")))
 
   ;; Specs: "Must return a mutable slice view". Mutating the original matrix?
   ;; TODO: return a D1Submatrix64F?
@@ -215,7 +226,7 @@
       (cond
        is-column? (ejml-submatrix-seq m (range start (+ start length)) 0)
        is-row?    (ejml-submatrix-seq m 0 (range start (+ start length)))
-       :else      (throw (IllegalArgumentException. "subvector of a matrix is undefined")))))
+       :else      (arg-error "subvector of a matrix is undefined"))))
 
 
   ;; Specs: "Must return a mutable slice view". Mutating the original matrix?
@@ -251,9 +262,8 @@
          (.setData m2 arr2)
          (.reshape m2 (+ mrows arows) mcols true)
          m2)
-       :else (throw (IllegalArgumentException.
-                     (str "joining matrices of incompatible shape: "
-                          m-shape " and " a-shape))))))
+       :else (arg-error "joining matrices of incompatible shape: "
+                        m-shape " and " a-shape))))
 
   mp/PMatrixSubComponents
   (main-diagonal [m]
