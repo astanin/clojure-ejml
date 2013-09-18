@@ -136,7 +136,12 @@
   (coerce-param [m p]
     (if (api/scalar? p)
       (double p)
-      (->> p mp/convert-to-nested-vectors to-ejml-matrix)))
+      (condp = (api/dimensionality p)
+        ;; create a column-vector from 1D params
+        1 (->> p api/to-nested-vectors (mapv vector) to-ejml-matrix)
+        ;; create a normal matrix otherwise
+        2 (->> p api/to-nested-vectors to-ejml-matrix)
+        (throw (IllegalArgumentException. "EJML supports only 2D matrices")))))
 
   ;; mp/PBroadcast
   ;; (broadcast [m target-shape])
