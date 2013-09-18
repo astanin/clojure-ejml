@@ -74,6 +74,28 @@
   `(throw (UnsupportedOperationException. (str ~@message-parts))))
 
 
+(defmacro do-multiply-or-scale
+  "Wraps different multiplication procedures with a fallback to
+  scalar scaling if the second argument is a scalar, and throwing
+  an exception when the operation is not possible.
+
+  Usage: (do-multiply-or-scale m a
+           :when (compatible-shapes? m a)
+           ;;; do something
+           :else \"error message\")
+  "
+  [mvar avar when-keyword doable? & body]
+  (let [m# mvar a# avar doable?# doable? body# body
+        [mult-body# err-body#] (split-with (fn [form] (not= :else form)) body#)]
+    (assert (= :when when-keyword))
+    (concat
+     `(cond
+       (api/scalar? ~a#) (api/scale ~m# ~a#)
+       ~doable?#         (do ~@mult-body#))
+     (when (seq err-body#)
+       `(:else           (do ~@(drop 1 err-body#)))))))
+
+
 (extend-type DenseMatrix64F
 
   mp/PImplementation
@@ -308,28 +330,47 @@
           ash (api/shape a)
           compatible-dims? (and (= 2 (count msh) (count ash))
                                 (= (last msh) (first ash)))]
-      (cond
-       (api/scalar? a)   (api/scale m a)
-       compatible-dims?  (let [r (new-ejml-matrix (first msh) (last ash))]
-                           (CommonOps/mult m a r)
-                           r)
-       :else             (arg-error "incompatible dimensions for matrix-multiply: "
-                                    msh " x " ash))))
+      (do-multiply-or-scale
+       m a
+       :when compatible-dims? (let [r (new-ejml-matrix (first msh) (last ash))]
+                                (CommonOps/mult m a r) r)
+       :else (arg-error "incompatible dimensions for matrix-multiply: " msh " x " ash))))
   (element-multiply [m a]
     (let [a (api/coerce m a)
           msh (api/shape m)
           ash (api/shape a)
           same-dims? (= msh ash)]
-      (cond
-       (api/scalar? a)  (api/scale m a)
-       same-dims?       (let [r (apply new-ejml-matrix msh)]
-                          (CommonOps/elementMult m a r)
-                          r)
-       :else            (arg-error "incompatible dimensions for element-multiply: "
-                                   msh " x " ash))))
+      (do-multiply-or-scale
+       m a
+       :when same-dims? (let [r (apply new-ejml-matrix msh)]
+                          (CommonOps/elementMult m a r) r)
+       :else (arg-error "incompatible dimensions for element-multiply: " msh " x " ash))))
 
-
-
-)
+  mp/PMatrixProducts
+  (inner-product [m a]
+    (let [a (api/coerce m a)
+          msh (api/shape m)
+          ash (api/shape a)
+          compatible-dims? (and (= 2 (count msh) (count ash))
+                                (= (first msh) (first ash)))]
+      (do-multiply-or-scale
+       m a
+       :when compatible-dims? (let [r (new-ejml-matrix (last msh) (last ash))]
+                                (CommonOps/multTransA m a r) r)
+       :else (arg-error "incompatible dimensions for inner-product: " msh " x " ash))))
+  (outer-product [m a]
+    (let [a (api/coerce m a)
+          compatible-shapes? (= 1 (last (api/shape m)) (first (api/shape a)))]
+      (do-multiply-or-scale
+       m a
+       :when compatible-shapes? (let [[rows _] (api/shape m)
+                                      [_ cols] (api/shape a)
+                                      r     (new-ejml-matrix rows cols)]
+                                  (doseq [i (range rows)
+                                          j (range cols)]
+                                    (.set r i j (* (api/mget m i 0) (api/mget a 0 j))))
+                                  r)
+       :else (arg-error "incompatible dimensions for outer-product: "
+                        (api/shape m) " x " (api/shape a))))))
 
 (mpi/register-implementation (new-ejml-matrix 2 2))
