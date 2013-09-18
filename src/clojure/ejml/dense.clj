@@ -51,6 +51,19 @@
     ))
 
 
+(defn ejml-submatrix-seq
+  "Returns a row-major sequence of submatrix' elements of m."
+  [m row-or-range column-or-range]
+  (let [row-range         (if (sequential? row-or-range) row-or-range [row-or-range])
+        [min-row max-row] (apply (juxt min max) row-range)
+        column-range      (if (sequential? column-or-range) column-or-range [column-or-range])
+        [min-col max-col] (apply (juxt min max) column-range)
+        m-iter            (MatrixIterator. m true min-row min-col max-row max-col)
+        n                 (* (count row-range) (count column-range))]
+    (for [_ row-range _ column-range]
+      (.next m-iter))))
+
+
 (extend-type DenseMatrix64F
 
   mp/PImplementation
@@ -179,13 +192,11 @@
   ;;
   mp/PMatrixSlices
   (get-row [m i]
-    (let [[_ cols] (api/shape m)
-          m-iter (MatrixIterator. m true i 0 i (- cols 1))]
-      (for [i (range cols)] (.next m-iter))))
+    (let [[_ cols] (api/shape m)]
+      (ejml-submatrix-seq m i (range cols))))
   (get-column [m i]
-    (let [[rows _] (api/shape m)
-          m-iter (MatrixIterator. m true 0 i (- rows 1) i)]
-      (for [i (range rows)] (.next m-iter))))
+    (let [[rows _] (api/shape m)]
+      (ejml-submatrix-seq m (range rows) i)))
   (get-major-slice [m i]
     (mp/get-row m i))
   (get-slice [m dimension i]
@@ -194,16 +205,24 @@
       1 (mp/get-column m i)
       (throw (UnsupportedOperationException. "EJML supports only 2D matrices"))))
 
-  ;;;; Specs: "Must return a mutable slice view". Mutating the original matrix?
-  ;;;; TODO: return a D1Submatrix64F?
-  ;; mp/PSubVector
-  ;; (subvector [m start length])
+  ;; Specs: "Must return a mutable slice view". Mutating the original matrix?
+  ;; TODO: return a D1Submatrix64F?
+  mp/PSubVector
+  (subvector [m start length]
+    (let [[rows cols] (api/shape m)
+          is-column?  (= 1 cols)
+          is-row?     (= 1 rows)]
+      (cond
+       is-column? (ejml-submatrix-seq m (range start (+ start length)) 0)
+       is-row?    (ejml-submatrix-seq m 0 (range start (+ start length)))
+       :else      (throw (IllegalArgumentException. "subvector of a matrix is undefined")))))
 
 
-  ;;;; Specs: "Must return a mutable slice view". Mutating the original matrix?
-  ;;;; TODO: return a D1Submatrix64F?
-  ;; mp/PSliceView
-  ;; (get-major-slice-view [m i])
+  ;; Specs: "Must return a mutable slice view". Mutating the original matrix?
+  ;; TODO: return a D1Submatrix64F?
+  mp/PSliceView
+  (get-major-slice-view [m i]
+    (mp/get-row m i))
 
   mp/PSliceSeq
   (get-major-slice-seq [m]
