@@ -1,11 +1,13 @@
 (ns clojure.ejml.dense
   "Implementation of core.matrix and linear algebra API for EJML DenseMatrix64F."
-  (:require [clojure.core.matrix :as m-api]
+  (:require [clojure.core.matrix :as api]
             [clojure.core.matrix.protocols :as mp]
             [clojure.core.matrix.implementations :as mpi])
-  (:import [org.ejml.data Matrix64F DenseMatrix64F]
+  (:import [org.ejml.data Matrix64F DenseMatrix64F MatrixIterator D1Submatrix64F]
            [org.ejml.ops CommonOps]))
 
+
+;;; TODO: implement matrix-api for D1Submatrix64F and SimpleMatrix too
 
 (defn- alloc-DenseMatrix64F
   ([^DenseMatrix64F m]
@@ -98,7 +100,12 @@
   mp/PMatrixCloning
   (clone [m] (.copy m))
 
+  ;; Unfortunately, it's impossible to implement clojure.lang.Seqable
+  ;; for a Java class without a wrapper.
+
+  ;;;
   ;;; Optional protocols
+  ;;;
 
   mp/PTypeInfo
   (element-type [m] (Double/TYPE))
@@ -106,7 +113,17 @@
   mp/PMutableMatrixConstruction
   (mutable-matrix [m] (.copy m))
 
-  ;; not implementing PZeroDimensionConstruction, PZeroDimensionAccess, PZeroDimensionSet
+  ;; Not implementing zero-dimension (scalar as a matrix).
+
+  ;; mp/PZeroDimensionConstruction
+  ;; (new-scalar-array [m] [m value])
+
+  ;; mp/PZeroDimensionAccess
+  ;; (get-0d [m])
+  ;; (set-0d! [m v])
+
+  ;; mp/PZeroDimensionSet
+  ;; (set-0d [m v])
 
   mp/PSpecialisedConstructors
   (identity-matrix [m dims]
@@ -115,7 +132,79 @@
   (diagonal-matrix [m diagonal-values]
     (CommonOps/diag (double-array diagonal-values)))
 
-  )
+  mp/PCoercion
+  (coerce-param [m p]
+    (if (api/scalar? p)
+      (double p)
+      (->> p mp/convert-to-nested-vectors to-ejml-matrix)))
 
+  ;; mp/PBroadcast
+  ;; (broadcast [m target-shape])
+
+  ;; mp/BroadcastLike
+  ;; (broadcast-like [m a])
+
+  mp/PConversion
+  (convert-to-nested-vectors [m]
+    (let [[rows cols] (map range (api/shape m))]
+      (vec (for [r rows]
+             (vec (for [c cols]
+                    (api/mget m r c)))))))
+
+  mp/PReshaping
+  (reshape [m new-shape]
+    ;; EJML can pad with zeros, but PReshaping/reshape should throw an exception
+    (when (> (apply * new-shape) (apply * (api/shape m)))
+      (throw (IllegalArgumentException.
+              "new shape requires more elements than the original shape")))
+    ;; or should return a new mutable copy
+    (let [[rows cols] new-shape
+          mcopy (api/clone m)]
+      (.reshape mcopy rows cols true)
+      mcopy))
+
+  ;; TODO: using D1Submatrix64F might help to avoid constructing new
+  ;; sequences/vectors, but we need to implement matrix-api for
+  ;; D1Submatrix64F first
+  ;;
+  ;; For future references:
+  ;;
+  ;;   (D1Submatrix. ...)  ; refers to the original matrix data
+  ;;   (.extract (D1Submatrix. ...))  ; copies data into SimpleMatrix
+  ;;
+  mp/PMatrixSlices
+  (get-row [m i]
+    (let [[_ cols] (api/shape m)
+          m-iter (MatrixIterator. m true i 0 i (- cols 1))]
+      (for [i (range cols)] (.next m-iter))))
+  (get-column [m i]
+    (let [[rows _] (api/shape m)
+          m-iter (MatrixIterator. m true 0 i (- rows 1) i)]
+      (for [i (range rows)] (.next m-iter))))
+  (get-major-slice [m i]
+    (mp/get-row m i))
+  (get-slice [m dimension i]
+    (condp = dimension
+      0 (mp/get-row m i)
+      1 (mp/get-column m i)
+      (throw (UnsupportedOperationException. "EJML supports only 2D matrices"))))
+
+  ;;;; Specs: "Must return a mutable slice view". Mutating the original matrix?
+  ;;;; TODO: return a D1Submatrix64F?
+  ;; mp/PSubVector
+  ;; (subvector [m start length])
+
+
+  ;;;; Specs: "Must return a mutable slice view". Mutating the original matrix?
+  ;;;; TODO: return a D1Submatrix64F?
+  ;; mp/PSliceView
+  ;; (get-major-slice-view [m i])
+
+  mp/PSliceSeq
+  (get-major-slice-seq [m]
+    (for [row (range (second (api/shape m)))]
+      (api/get-row m row))))
+
+)
 
 (mpi/register-implementation (new-ejml-matrix 2 2))
