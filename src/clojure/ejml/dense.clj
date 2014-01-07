@@ -372,7 +372,7 @@
     (let [[r c] (api/shape m)
           d (new-ejml-matrix (min r c) 1)]
       (CommonOps/extractDiag m d)
-      d))
+      (.data d)))
 
   ;; TODO: understand what assign-array! should do and implement it too
   mp/PAssignment
