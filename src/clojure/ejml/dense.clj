@@ -189,8 +189,12 @@
 
   mp/PSpecialisedConstructors
   (identity-matrix [m dims]
-    (let [[^int rows ^int cols] dims]
-      (CommonOps/identity rows cols)))
+      (let [[^int rows ^int cols]
+            (if (seq? dims)
+              dims  ;; dims is a sequance, create a possibly non-square matrix
+              [dims dims]  ;; dims is a scalar (like in compliance-test), create a square matrix
+              )]
+        (CommonOps/identity rows cols)))
   (diagonal-matrix [m diagonal-values]
     (CommonOps/diag (double-array diagonal-values)))
 
