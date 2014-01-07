@@ -7,6 +7,16 @@
            [org.ejml.ops CommonOps]))
 
 
+(defmacro arg-error
+  [& message-parts]
+  `(throw (IllegalArgumentException. (str ~@message-parts))))
+
+
+(defmacro unsupported-error
+  [& message-parts]
+  `(throw (UnsupportedOperationException. (str ~@message-parts))))
+
+
 ;;; TODO: implement matrix-api for D1Submatrix64F and SimpleMatrix too
 
 (defn- alloc-DenseMatrix64F
@@ -62,16 +72,6 @@
         n                 (* (count row-range) (count column-range))]
     (for [_ row-range _ column-range]
       (.next m-iter))))
-
-
-(defmacro arg-error
-  [& message-parts]
-  `(throw (IllegalArgumentException. (str ~@message-parts))))
-
-
-(defmacro unsupported-error
-  [& message-parts]
-  `(throw (UnsupportedOperationException. (str ~@message-parts))))
 
 
 (defmacro do-multiply-or-scale
