@@ -290,78 +290,82 @@
       (.reshape mcopy rows cols true)
       mcopy))
 
-  ;; TODO: using D1Submatrix64F might help to avoid constructing new
-  ;; sequences/vectors, but we need to implement matrix-api for
-  ;; D1Submatrix64F first
-  ;;
-  ;; For future references:
-  ;;
-  ;;   (D1Submatrix. ...)  ; refers to the original matrix data
-  ;;   (.extract (D1Submatrix. ...))  ; copies data into SimpleMatrix
-  ;;
-  mp/PMatrixSlices
-  (get-row [m i]
-    (let [[_ cols] (api/shape m)]
-      (ejml-submatrix-seq m i (range cols))))
-  (get-column [m i]
-    (let [[rows _] (api/shape m)]
-      (ejml-submatrix-seq m (range rows) i)))
-  (get-major-slice [m i]
-    (mp/get-row m i))
-  (get-slice [m dimension i]
-    (condp = dimension
-      0 (mp/get-row m i)
-      1 (mp/get-column m i)
-      (unsupported-error "EJML supports only 2D matrices")))
+  ;; Don't implement PPack because only DenseMatrix64F is supported now.
 
-  ;; Specs: "Must return a mutable slice view". Mutating the original matrix?
-  ;; TODO: return a D1Submatrix64F?
-  mp/PSubVector
-  (subvector [m start length]
-    (let [[rows cols] (api/shape m)
-          is-column?  (= 1 cols)
-          is-row?     (= 1 rows)]
-      (cond
-       is-column? (ejml-submatrix-seq m (range start (+ start length)) 0)
-       is-row?    (ejml-submatrix-seq m 0 (range start (+ start length)))
-       :else      (arg-error "subvector of a matrix is undefined"))))
+  ;; TODO: implement mutable slices to pass the tests
 
+  ;; ;; TODO: using D1Submatrix64F might help to avoid constructing new
+  ;; ;; sequences/vectors, but we need to implement matrix-api for
+  ;; ;; D1Submatrix64F first
+  ;; ;;
+  ;; ;; For future references:
+  ;; ;;
+  ;; ;;   (D1Submatrix. ...)  ; refers to the original matrix data
+  ;; ;;   (.extract (D1Submatrix. ...))  ; copies data into SimpleMatrix
+  ;; ;;
+  ;; mp/PMatrixSlices
+  ;; (get-row [m i]
+  ;;   (let [[_ cols] (api/shape m)]
+  ;;     (ejml-submatrix-seq m i (range cols))))
+  ;; (get-column [m i]
+  ;;   (let [[rows _] (api/shape m)]
+  ;;     (ejml-submatrix-seq m (range rows) i)))
+  ;; (get-major-slice [m i]
+  ;;   (mp/get-row m i))
+  ;; (get-slice [m dimension i]
+  ;;   (condp = dimension
+  ;;     0 (mp/get-row m i)
+  ;;     1 (mp/get-column m i)
+  ;;     (unsupported-error "EJML supports only 2D matrices")))
 
-  ;; Specs: "Must return a mutable slice view". Mutating the original matrix?
-  ;; TODO: return a D1Submatrix64F?
-  mp/PSliceView
-  (get-major-slice-view [m i]
-    (mp/get-row m i))
-
-  mp/PSliceSeq
-  (get-major-slice-seq [m]
-    (for [row (range (second (api/shape m)))]
-      (api/get-row m row)))
+  ;; ;; Specs: "Must return a mutable slice view". Mutating the original matrix?
+  ;; ;; TODO: return a D1Submatrix64F?
+  ;; mp/PSubVector
+  ;; (subvector [m start length]
+  ;;   (let [[rows cols] (api/shape m)
+  ;;         is-column?  (= 1 cols)
+  ;;         is-row?     (= 1 rows)]
+  ;;     (cond
+  ;;      is-column? (ejml-submatrix-seq m (range start (+ start length)) 0)
+  ;;      is-row?    (ejml-submatrix-seq m 0 (range start (+ start length)))
+  ;;      :else      (arg-error "subvector of a matrix is undefined"))))
 
 
-  ;; TODO: suggest a variadic (join) in matrix-api to avoid multiple allocations
-  mp/PSliceJoin
-  (join [m a]
-    (let [m-shape (api/shape m)
-          a-shape (api/shape a)]
-      (cond
-       (= (rest m-shape) a-shape)  ;; joining with a 1D row vector
-       (let [m2 (api/clone m)
-             arr2 (double-array (concat (.data m2) (api/eseq a)))
-             [mrows mcols] m-shape]
-         (.setData m2 arr2)
-         (.reshape m2 (+ 1 mrows) mcols true)
-         m2)
-       (= (rest m-shape) (rest a-shape))  ;; joining rows
-       (let [m2 (api/clone m)
-             arr2 (double-array (concat (.data m2) (api/eseq a)))
-             [mrows mcols] m-shape
-             [arows _]     a-shape]
-         (.setData m2 arr2)
-         (.reshape m2 (+ mrows arows) mcols true)
-         m2)
-       :else (arg-error "joining matrices of incompatible shape: "
-                        m-shape " and " a-shape))))
+  ;; ;; Specs: "Must return a mutable slice view". Mutating the original matrix?
+  ;; ;; TODO: return a D1Submatrix64F?
+  ;; mp/PSliceView
+  ;; (get-major-slice-view [m i]
+  ;;   (mp/get-row m i))
+
+  ;; mp/PSliceSeq
+  ;; (get-major-slice-seq [m]
+  ;;   (for [row (range (second (api/shape m)))]
+  ;;     (api/get-row m row)))
+
+
+  ;; ;; TODO: suggest a variadic (join) in matrix-api to avoid multiple allocations
+  ;; mp/PSliceJoin
+  ;; (join [m a]
+  ;;   (let [m-shape (api/shape m)
+  ;;         a-shape (api/shape a)]
+  ;;     (cond
+  ;;      (= (rest m-shape) a-shape)  ;; joining with a 1D row vector
+  ;;      (let [m2 (api/clone m)
+  ;;            arr2 (double-array (concat (.data m2) (api/eseq a)))
+  ;;            [mrows mcols] m-shape]
+  ;;        (.setData m2 arr2)
+  ;;        (.reshape m2 (+ 1 mrows) mcols true)
+  ;;        m2)
+  ;;      (= (rest m-shape) (rest a-shape))  ;; joining rows
+  ;;      (let [m2 (api/clone m)
+  ;;            arr2 (double-array (concat (.data m2) (api/eseq a)))
+  ;;            [mrows mcols] m-shape
+  ;;            [arows _]     a-shape]
+  ;;        (.setData m2 arr2)
+  ;;        (.reshape m2 (+ mrows arows) mcols true)
+  ;;        m2)
+  ;;      :else (arg-error "joining matrices of incompatible shape: "
+  ;;                       m-shape " and " a-shape))))
 
   mp/PMatrixSubComponents
   (main-diagonal [m]
