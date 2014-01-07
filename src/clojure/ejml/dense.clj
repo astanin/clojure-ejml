@@ -44,12 +44,33 @@
 
 
 (defn to-ejml-matrix
-  "Converts a sequences of sequences to a new EJML DenseMatrix64F."
-  ([seq-of-seqs]
-     (if (instance? DenseMatrix64F seq-of-seqs)  ; safe to call (to-matrix (to-matrix ..))
-       seq-of-seqs
-       (let [^"[[D" arr2d (into-array (map double-array seq-of-seqs))]
-        (DenseMatrix64F. arr2d)))))
+  "Converts input to a new EJML DenseMatrix64F.
+
+  Input can be:
+
+    - a sequence of sequences of numbers or other 2D-shaped matrix data
+    - a sequence of numbers
+    - a DenseMatrix64F"
+  ([input]
+     (cond
+
+      (instance? DenseMatrix64F input) ; safe to call (to-matrix (to-matrix ..))
+      input
+
+      (= 2 (api/dimensionality input)) ; create a 2D matrix
+      (let [^"[[D" arr2d (into-array (map double-array input))]
+        (DenseMatrix64F. arr2d))
+
+      (= 1 (api/dimensionality input)) ; create a row vector
+      (let [^"[[D" arr2d (into-array [(double-array input)])]
+        (DenseMatrix64F. arr2d))
+
+      (= 0 (api/dimensionality input)) ; create a 1x1 matrix
+      (let [^"[[D" arr2d (into-array [(double-array [input])])]
+        (DenseMatrix64F. arr2d))
+
+      :otherwise
+      (arg-error "to-ejml-matrix: cannot create a matrix from " input))))
 
 
 (defn from-ejml-matrix
