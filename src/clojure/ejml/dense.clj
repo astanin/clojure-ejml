@@ -105,7 +105,7 @@
   (new-vector [m length] (new-ejml-matrix length 1))
   (new-matrix [m rows cols] (new-ejml-matrix rows cols))
   (new-matrix-nd [m shape] (let [[rows cols] shape] (new-ejml-matrix rows cols)))
-  (supports-dimensionality? [m dimensions] (<= 1 dimensions 2))
+  (supports-dimensionality? [m dimensions] (= dimensions 2))
 
   mp/PDimensionInfo
   (dimensionality [m] 2)
