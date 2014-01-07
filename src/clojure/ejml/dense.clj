@@ -203,6 +203,21 @@
   mp/PMutableMatrixConstruction
   (mutable-matrix [m] (.copy m))
 
+  ;; ;; EJML doesn't support sparse representation yet. Return nil from
+  ;; ;; PSparse methods to indicate that sparse conversion is not available.
+  ;; ;; TODO: Uncomment when the new version of core.matrix is released.
+  ;; mp/PSparse
+  ;; (sparse-coerce [m data])
+  ;; (sparse [m])
+
+  ;; ;; TODO: Uncomment when the new version of core.matrix is released.
+  ;; mp/PDense
+  ;; (dense-coerse [m data] (mp/coerse m data))
+  ;; (dense [m] m)
+
+  ;; Not implementing PImmutableMatrixConstruction because EJML
+  ;; doesn't support immutable matrices.
+
   ;; Not implementing zero-dimension (scalar as a matrix).
 
   ;; mp/PZeroDimensionConstruction
@@ -225,6 +240,8 @@
         (CommonOps/identity rows cols)))
   (diagonal-matrix [m diagonal-values]
     (CommonOps/diag (double-array diagonal-values)))
+
+  ;; Not implementing PPermutationMatrix, using the default implementation.
 
   mp/PCoercion
   (coerce-param [m p]
