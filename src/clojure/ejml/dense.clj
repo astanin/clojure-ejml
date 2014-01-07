@@ -125,7 +125,14 @@
   (construct-matrix [m data] (to-ejml-matrix data))
   (new-vector [m length] (new-ejml-matrix length 1))
   (new-matrix [m rows cols] (new-ejml-matrix rows cols))
-  (new-matrix-nd [m shape] (let [[rows cols] shape] (new-ejml-matrix rows cols)))
+  (new-matrix-nd [m shape]
+    (condp = (count shape)
+      ;; create a 2D matrix (ND not supported by EJML)
+      2     (let [[rows cols] shape] (new-ejml-matrix rows cols))
+      ;; create a row-vector
+      1     (let [[cols] shape] (new-ejml-matrix 1 cols))
+      ;; throw an exception otherwise
+      (arg-error "unsupported shape for an EJML matrix: ")))
   (supports-dimensionality? [m dimensions] (= dimensions 2))
 
   mp/PDimensionInfo
