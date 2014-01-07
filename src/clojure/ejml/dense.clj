@@ -397,8 +397,10 @@
     (let [b       (api/coerce a b)
           a-shape (api/shape a)
           b-shape (api/shape b)
-          a-seq   (ejml-submatrix-seq a (range (first a-shape)) (range (second a-shape)))
-          b-seq   (ejml-submatrix-seq b (range (first b-shape)) (range (second b-shape)))]
+          a-seq   (when (seq a-shape)
+                    (ejml-submatrix-seq a (range (first a-shape)) (range (second a-shape))))
+          b-seq   (when (seq b-shape)
+                    (ejml-submatrix-seq b (range (first b-shape)) (range (second b-shape))))]
       (and (= a-shape b-shape)
            (every? #(apply == %) (map list a-seq b-seq)))))
 
