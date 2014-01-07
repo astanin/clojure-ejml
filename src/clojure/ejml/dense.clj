@@ -237,12 +237,22 @@
         2 (->> p api/to-nested-vectors to-ejml-matrix)
         (arg-error "EJML supports only 2D matrices, but params' shape is " (api/shape p)))))
 
-  ;; TODO: implement broadcasting
-  ;; mp/PBroadcast
-  ;; (broadcast [m target-shape])
+  ;; EJML seems to be unable to build matrices from blocks, so we
+  ;; convert to intermediate vector-based representation to handle
+  ;; arbitrary broadcasting.
+  mp/PBroadcast
+  (broadcast [m target-shape]
+    (let [vm (-> m
+                 api/to-nested-vectors
+                 (api/broadcast target-shape))]
+      (if (<= 0 (api/dimensionality vm) 2)
+        (to-ejml-matrix vm)
+        ;; EJML supports only 2D matrices, fall back to vector
+        ;; representation for higher dimensionality
+        vm)))
 
-  ;; mp/BroadcastLike
-  ;; (broadcast-like [m a])
+  ;; Not implementing PBroadcastLike and PBroadcastCoerce, using the
+  ;; default implementation
 
   mp/PConversion
   (convert-to-nested-vectors [m]
