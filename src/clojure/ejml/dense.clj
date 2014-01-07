@@ -155,6 +155,23 @@
   mp/PTypeInfo
   (element-type [m] (Double/TYPE))
 
+  ;; Not implementing PArrayMetrics yet (nonzero-count).
+  ;; EJML doesn't have an optimized implementation of the method.
+
+  ;; Not implementing PValidateShape (validate-shape).
+  ;; Assuming EJML takes care of the valid matrix state.
+
+  mp/PRowColMatrix
+  (column-matrix [m data]
+    (if (= 1 (api/dimensionality data))
+      (to-ejml-matrix (mapv vector data))
+      ; "should throw an error if the data is not a 1D vector
+      (arg-error "not a 1D vector: shape = " (api/shape data))))
+  (row-matrix [m data]
+    (if (= 1 (api/dimensionality data))
+      (to-ejml-matrix [data])
+      (arg-error "not a 1D vector: shape = " (api/shape data))))
+
   mp/PMutableMatrixConstruction
   (mutable-matrix [m] (.copy m))
 
