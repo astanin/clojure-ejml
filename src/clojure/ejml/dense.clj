@@ -115,6 +115,35 @@
       (.next m-iter))))
 
 
+(defn ejml-matrix-seq
+  "Returns a row-major sequence of all matrix elements of m."
+  [m]
+  (let [[rows cols] (api/shape m)
+        m-iter      (MatrixIterator. m true 0 0 (- rows 1) (- cols 1))]
+    (for [_ (range (* rows cols))]
+      (.next m-iter))))
+
+
+(defn ejml-rows-seq
+  "Returns a sequence of rows for a matrix m or its submatrix.
+
+  Arguments row-or-range and column-or-range can be:
+
+    - nil        to select all rows or all columns respectively
+    - a number   to select just one row or just one column respectively
+    - a sequence to select a contiguous range of rows or columns,
+                 e.g. [1 4] to select 2nd, 3rd, 4th, and 5th rows (columns).
+  "
+  ([m]
+     (let [elements-seq (ejml-matrix-seq m)
+           [rows cols]  (api/shape m)]
+       (partition-all cols elements-seq)))
+  ([m row-or-range columns-or-range]
+     (let [elements-seq (ejml-submatrix-seq m row-or-range columns-or-range)
+           cols         (if (sequential? columns-or-range) (count columns-or-range) 1)]
+       (partition-all cols elements-seq))))
+
+
 (defmacro do-multiply-or-scale
   "Wraps different multiplication procedures with a fallback to
   scalar scaling if the second argument is a scalar, and throwing
