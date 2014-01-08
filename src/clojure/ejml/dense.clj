@@ -83,15 +83,35 @@
 
 
 (defn ejml-submatrix-seq
-  "Returns a row-major sequence of submatrix' elements of m."
+  "Returns a row-major sequence of submatrix' elements of m.
+
+  Arguments row-or-range and column-or-range can be:
+
+    - nil        to select all rows or all columns respectively
+    - a number   to select just one row or just one column respectively
+    - a sequence to select a contiguous range of rows or columns,
+                 e.g. [1 4] to select 2nd, 3rd, 4th, and 5th rows (columns).
+  "
   [m row-or-range column-or-range]
-  (let [row-range         (if (sequential? row-or-range) row-or-range [row-or-range])
+  (let [[rows cols]       (api/shape m)
+        row-range         (if row-or-range
+                            (if (sequential? row-or-range) row-or-range [row-or-range])
+                            ;; all rows otherwise
+                            [0 (- rows 1)])
         [min-row max-row] (apply (juxt min max) row-range)
-        column-range      (if (sequential? column-or-range) column-or-range [column-or-range])
+        min-row           (max min-row 0)
+        max-row           (min max-row (- rows 1))
+        column-range      (if column-or-range
+                            (if (sequential? column-or-range) column-or-range [column-or-range])
+                            ;; all columns otherwise
+                            [0 (- cols 1)]
+                            )
         [min-col max-col] (apply (juxt min max) column-range)
+        min-col           (max min-col 0)
+        max-col           (min max-col (- cols 1))
         m-iter            (MatrixIterator. m true min-row min-col max-row max-col)
-        n                 (* (count row-range) (count column-range))]
-    (for [_ row-range _ column-range]
+        n                 (* (+ 1 (- max-row min-row)) (+ 1 (- max-col min-col)))]
+    (for [_ (range n)]
       (.next m-iter))))
 
 
