@@ -248,9 +248,9 @@
     (if (api/scalar? p)
       (double p)
       (condp = (api/dimensionality p)
-        ;; create a column-vector from 1D params
-        1 (->> p api/to-nested-vectors (mapv vector) to-ejml-matrix)
-        ;; create a normal matrix otherwise
+        ;; create an array of doubles from 1D params
+        1 (->> p api/to-nested-vectors double-array)
+        ;; create a normal EJML matrix otherwise
         2 (->> p api/to-nested-vectors to-ejml-matrix)
         (arg-error "EJML supports only 2D matrices, but params' shape is " (api/shape p)))))
 
