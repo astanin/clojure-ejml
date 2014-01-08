@@ -61,8 +61,8 @@
       (let [^"[[D" arr2d (into-array (map double-array input))]
         (DenseMatrix64F. arr2d))
 
-      (= 1 (api/dimensionality input)) ; create a row vector
-      (let [^"[[D" arr2d (into-array [(double-array input)])]
+      (= 1 (api/dimensionality input)) ; create a column vector
+      (let [^"[[D" arr2d (into-array (mapv (comp double-array vector) input))]
         (DenseMatrix64F. arr2d))
 
       (= 0 (api/dimensionality input)) ; create a 1x1 matrix
@@ -144,26 +144,61 @@
        (partition-all cols elements-seq))))
 
 
-(defmacro do-multiply-or-scale
-  "Wraps different multiplication procedures with a fallback to
-  scalar scaling if the second argument is a scalar, and throwing
-  an exception when the operation is not possible.
+(defn do-op
+  "A wrapper for binary matrix-anything operations with shape checks and conversions.
 
-  Usage: (do-multiply-or-scale m a
-           :when (compatible-shapes? m a)
-           ;;; do something
-           :else \"error message\")
+  Usage:
+
+  (do-op m a
+    :with-scalar (fn [m scalar-a] ...)
+    :with-vector (fn [m vector-a] ...)
+    :with-matrix (fn [m matrix-a] ...)
+    :shape-constraint (fn [m-shape a-shape] ...)
+    :interop-1d true))
+
+  If :with-scalar and :with-vector operations are not
+  defined, :with-matrix operation is used for scalar and vector
+  arguments. Scalars are coerced to double, vectors are converted to
+  column-vectors.
+
+  :with-vector clause can take a special value :interop-1d, which will
+  apply matrix-matrix operation modified by interop-1d.
+
+  If :shape-constraint is missing, the same-shape constraint is assumed.
+
+  If :interop-1d is given and is true, input and result are both 1D,
+  then the returned value is converted to 1D shape for
+  interoperability with vector implementation.
   "
-  [mvar avar when-keyword doable? & body]
-  (let [m# mvar a# avar doable?# doable? body# body
-        [mult-body# err-body#] (split-with (fn [form] (not= :else form)) body#)]
-    (assert (= :when when-keyword))
-    (concat
-     `(cond
-       (api/scalar? ~a#) (api/scale ~m# ~a#)
-       ~doable?#         (do ~@mult-body#))
-     (when (seq err-body#)
-       `(:else           (do ~@(drop 1 err-body#)))))))
+  [m a & ops]
+  (let [ops-map (apply hash-map ops)
+        shape-constraint (:shape-constraint ops-map (fn [m-shape a-shape] (= m-shape a-shape)))
+        result-shape (:result-shape ops-map (fn [m-shape _] m-shape))
+        result (cond
+                ;; matrix-scalar operation
+                (and (contains? ops-map :with-scalar)
+                     (api/scalar? a))
+                (let [scalar-op (:with-scalar ops-map)]
+                  (scalar-op m (api/coerce m a)))
+                ;; matrix-vector operation
+                (and (contains? ops-map :with-vector)
+                     (api/vec? a))
+                (let [vector-op (:with-vector ops-map)]
+                  (vector-op m (api/coerce m a)))
+                ;; default matrix-matrix operation
+                (contains? ops-map :with-matrix)
+                (let [matrix-op (:with-matrix ops-map)
+                      a-2d-or-0d (if (not (api/scalar? a)) (to-ejml-matrix a) (api/coerce m a))
+                      compatible-dims? (shape-constraint (api/shape m) (api/shape a-2d-or-0d))]
+                  (if (or compatible-dims? (api/scalar? a))
+                    (matrix-op m a-2d-or-0d)
+                    ;; otherwise
+                    (arg-error "incompatible dimensions: " (api/shape m) " & " (api/shape a))))
+                :otherwise
+                (arg-error ":with-matrix clause not found"))]
+    (if (and (:interop-1d ops-map) (api/vec? a) (ejml-1d? result))
+      (from-ejml-matrix result)
+      result)))
 
 
 (extend-type DenseMatrix64F
@@ -242,7 +277,7 @@
   (column-matrix [m data]
     (if (= 1 (api/dimensionality data))
       (to-ejml-matrix (mapv vector data))
-      ; "should throw an error if the data is not a 1D vector
+                                        ; "should throw an error if the data is not a 1D vector
       (arg-error "not a 1D vector: shape = " (api/shape data))))
   (row-matrix [m data]
     (if (= 1 (api/dimensionality data))
@@ -281,12 +316,12 @@
 
   mp/PSpecialisedConstructors
   (identity-matrix [m dims]
-      (let [[^int rows ^int cols]
-            (if (seq? dims)
-              dims  ;; dims is a sequance, create a possibly non-square matrix
-              [dims dims]  ;; dims is a scalar (like in compliance-test), create a square matrix
-              )]
-        (CommonOps/identity rows cols)))
+    (let [[^int rows ^int cols]
+          (if (seq? dims)
+            dims  ;; dims is a sequance, create a possibly non-square matrix
+            [dims dims]  ;; dims is a scalar (like in compliance-test), create a square matrix
+            )]
+      (CommonOps/identity rows cols)))
   (diagonal-matrix [m diagonal-values]
     (CommonOps/diag (double-array diagonal-values)))
 
@@ -456,52 +491,118 @@
 
   mp/PMatrixMultiply
   (matrix-multiply [m a]
-    (let [a (api/coerce m a)
-          msh (api/shape m)
-          ash (api/shape a)
-          compatible-dims? (and (= 2 (count msh) (count ash))
-                                (= (last msh) (first ash)))]
-      (do-multiply-or-scale
-       m a
-       :when compatible-dims? (let [r (new-ejml-matrix (first msh) (last ash))]
-                                (CommonOps/mult m a r) r)
-       :else (arg-error "incompatible dimensions for matrix-multiply: " msh " x " ash))))
+    (do-op m a
+      :with-scalar
+      (fn [m a]
+        (let [r (apply new-ejml-matrix (api/shape m))]
+          (CommonOps/scale a m r)
+          r))
+      :with-matrix
+      (fn [m a]
+        (let [r (new-ejml-matrix (first (api/shape m)) (second (api/shape a)))]
+          (CommonOps/mult m a r)
+          r))
+      :shape-constraint
+      (fn [msh ash]
+        (= (second msh) (first ash)))
+      :interop-1d
+      true))
+  ;;
   (element-multiply [m a]
-    (let [a (api/coerce m a)
-          msh (api/shape m)
-          ash (api/shape a)
-          same-dims? (= msh ash)]
-      (do-multiply-or-scale
-       m a
-       :when same-dims? (let [r (apply new-ejml-matrix msh)]
-                          (CommonOps/elementMult m a r) r)
-       :else (arg-error "incompatible dimensions for element-multiply: " msh " x " ash))))
+    (let [r (apply new-ejml-matrix (api/shape m))]
+      (do-op m a
+        :with-scalar
+        (fn [m a]
+          (CommonOps/scale a m r)
+          r)
+        :with-vector
+        (fn [m v]
+          (let [vm (api/broadcast-like m v)]
+            (CommonOps/elementMult m vm r)
+            r))
+        :with-matrix
+        (fn [m a]
+          (CommonOps/elementMult m a r)
+          r))))
 
   mp/PMatrixProducts
-  (inner-product [m a]
-    (let [a (api/coerce m a)
-          msh (api/shape m)
-          ash (api/shape a)
-          compatible-dims? (and (= 2 (count msh) (count ash))
-                                (= (first msh) (first ash)))]
-      (do-multiply-or-scale
-       m a
-       :when compatible-dims? (let [r (new-ejml-matrix (last msh) (last ash))]
-                                (CommonOps/multTransA m a r) r)
-       :else (arg-error "incompatible dimensions for inner-product: " msh " x " ash))))
+  (inner-product [m a]  ;; FIXME: decide on the meaning of the matrix inner product
+    (do-op m a
+      :with-scalar
+      (fn [m a]
+        (let [am (api/broadcast-like m a)]
+          (api/inner-product m am)))
+      :with-vector
+      (fn [m a]
+        (let [am (api/broadcast-like m a)]
+          (api/inner-product m am)))
+      :with-matrix
+      (fn [m a]
+        (let [[_ mcols] (api/shape m)
+              [_ acols] (api/shape a)
+              r   (new-ejml-matrix mcols acols)]
+          (CommonOps/multTransA m a r)
+          r))
+      :shape-constraint
+      (fn [[mrows _] [arows _]]
+        (= mrows arows))))
+  ;;
   (outer-product [m a]
-    (let [a (api/coerce m a)
-          compatible-shapes? (= 1 (last (api/shape m)) (first (api/shape a)))]
-      (do-multiply-or-scale
-       m a
-       :when compatible-shapes? (let [[rows _] (api/shape m)
-                                      [_ cols] (api/shape a)
-                                      r     (new-ejml-matrix rows cols)]
-                                  (doseq [i (range rows)
-                                          j (range cols)]
-                                    (.set r i j (* (api/mget m i 0) (api/mget a 0 j))))
-                                  r)
-       :else (arg-error "incompatible dimensions for outer-product: "
-                        (api/shape m) " x " (api/shape a))))))
+    (do-op m a
+      :with-matrix
+      (fn [m a]
+        (let [[mrows _] (api/shape m)
+              [_ acols] (api/shape a)
+              r  (new-ejml-matrix mrows acols)]
+          (doseq [i (range mrows)
+                  j (range acols)]
+            (.set r i j (* (api/mget m i 0) (api/mget a 0 j))))
+          r))
+      :shape-constraint
+      (fn [[_ mcols] [arows _]]
+        (= 1 mcols arows))))
+
+  mp/PMatrixAdd
+  (matrix-add [m a]
+    (let [r (apply new-ejml-matrix (api/shape m))]
+      (do-op m a
+        :with-matrix
+        (fn [m a]
+          (CommonOps/add m a r)
+          r)
+        :with-vector
+        (fn [m ^doubles a]
+          (let [am (->> a (api/broadcast-like m) to-ejml-matrix)]
+            (CommonOps/add m am r)
+            r))
+        :with-scalar
+        (fn [m ^double a]
+          (CommonOps/add m a r)
+          r))))
+  ;;
+  (matrix-sub [m a]
+    (let [r (apply new-ejml-matrix (api/shape m))]
+      (do-op m a
+        :with-matrix
+        (fn [m a]
+          (CommonOps/sub m a r)
+          r)
+        :with-vector
+        (fn [m ^doubles a]
+          (let [am (->> a (api/broadcast-like m) to-ejml-matrix)]
+            (CommonOps/sub m am r)
+            r))
+       :with-scalar
+       (fn [m a]
+         (CommonOps/add m (* -1 a) r)
+         r))))
+
+)
 
 (mpi/register-implementation (new-ejml-matrix 2 2))
+
+;; Local Variables:
+;; eval: (put 'do-op 'clojure-indent-function 2)
+;; eval: (put 'arg-error 'clojure-indent-function 0)
+;; eval: (put 'unsupported-error 'clojure-indent-function 0)
+;; End:
