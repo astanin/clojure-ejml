@@ -1,4 +1,4 @@
-(defproject clojure-ejml "0.1.0-SNAPSHOT"
+(defproject clojure-ejml "0.18.0.1-SNAPSHOT"  ;; works with core.matrix 0.18.0
   :description "Efficient Java Matrix Library now for Clojure"
   :url "http://github.com/astanin/clojure-ejml"
   :license {:name "Eclipse Public License"
