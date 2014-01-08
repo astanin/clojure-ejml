@@ -53,7 +53,7 @@
 
 
 (defn from-ejml-matrix
-  "Converts an EJML DenseMatrix64F to a Clojure vector or vectors."
+  "Converts an EJML DenseMatrix64F to a Clojure vector or a vector or vectors."
   [^DenseMatrix64F m]
   (if (ejml-1d? m)
     (into [] (.getData m))  ; 1D matrix to a simple vector
