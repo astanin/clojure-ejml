@@ -26,7 +26,7 @@
      (DenseMatrix64F. rows cols)))
 
 
-(defn ejml-shape
+(defn- ejml-shape
   [^DenseMatrix64F m]
   [(.getNumRows m) (.getNumCols m)])
 
