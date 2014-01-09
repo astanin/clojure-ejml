@@ -1,8 +1,9 @@
-(ns clojure.ejml.dense
+(ns clojure.core.matrix.impl.ejml
   "Implementation of core.matrix and linear algebra API for EJML DenseMatrix64F."
   (:require [clojure.core.matrix :as api]
             [clojure.core.matrix.protocols :as mp]
-            [clojure.core.matrix.implementations :as mpi])
+            [clojure.core.matrix.implementations :as mpi]
+            [clojure.core.matrix.linalg :as linalg])
   (:import [org.ejml.data Matrix64F DenseMatrix64F MatrixIterator D1Submatrix64F]
            [org.ejml.ops CommonOps]))
 
@@ -213,7 +214,7 @@
 (extend-type DenseMatrix64F
 
   mp/PImplementation
-  (implementation-key [m] :ejml-dense-64bit)
+  (implementation-key [m] :ejml)
   (meta-info [m] {:doc "org.ejml.data.DenseMatrix64F"})
   (construct-matrix [m data] (to-ejml-matrix data))
   (new-vector [m length] (new-ejml-matrix length 1))

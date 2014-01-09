@@ -8,4 +8,5 @@
                  [net.mikera/core.matrix "0.18.0"]  ;; EPL 1.0
                  ]
   :profiles {:dev {:plugins [[codox "0.6.6"]  ; lein with-profile dev doc
-                             ]}})
+                             ]
+                   :dependencies [[org.clojure/tools.nrepl "0.2.3"]]}})

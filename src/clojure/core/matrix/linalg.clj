@@ -1,4 +1,4 @@
-(ns clojure.core.linalg
+(ns clojure.core.matrix.linalg
   "This is sandbox for linear algebra extensions to clojure.core.matrix API.
 
 Status of matrix operations support in clojure APIs w.r.t NumPy and
