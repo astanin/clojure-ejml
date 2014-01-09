@@ -144,6 +144,14 @@
        (partition-all cols elements-seq))))
 
 
+(defn ejml-index-range
+  "Returns a sequence of all indicies of a matrix in row-major order."
+  [m]
+  (let [[rows cols] (api/shape m)]
+    (for [i (range rows) j (range cols)]
+      [i j])))
+
+
 (defn do-op
   "A wrapper for binary matrix-anything operations with shape checks and conversions.
 
@@ -598,6 +606,97 @@
          (CommonOps/add m (* -1 a) r)
          r))))
 
+  mp/PMatrixScaling
+  (scale [m a]
+    (let [r (apply new-ejml-matrix (api/shape m))
+          as (api/coerce m a)]
+      (CommonOps/scale as m r)
+      r))
+  ;;
+  (pre-scale [m a]
+    (api/scale m a))
+
+  mp/PMatrixDivide
+  (element-divide [m a]
+    (let [r (apply new-ejml-matrix (api/shape m))]
+      (do-op m a
+        :with-scalar
+        (fn [m a]
+          (CommonOps/divide a m r)
+          r)
+        :with-vector
+        (fn [m v]
+          (let [vm (->> v (api/broadcast-like m) to-ejml-matrix)]
+            (CommonOps/elementDiv m vm r)
+            r))
+        :with-matrix
+        (fn [m a]
+          (CommonOps/elementDiv m a r)
+          r))))
+
+  mp/PExponent
+  (element-pow [m exponent]
+    (let [e (api/coerce m exponent)]
+      (api/emap #(Math/pow % e) m)))
+
+  mp/PFunctionalOperations
+  (element-seq [m]
+    (ejml-matrix-seq m))
+  ;;
+  (element-map
+    ([m f]
+       (let [r (apply new-ejml-matrix (api/shape m))]
+         (doseq [[i j] (ejml-index-range m)]
+           (let [^double x (mp/get-2d m i j)]
+             (mp/set-2d! r i j (f x))))
+         r))
+    ([m f a]
+       (let [r (apply new-ejml-matrix (api/shape m))
+             a (->> a (api/broadcast-like m) to-ejml-matrix)]
+         (doseq [[i j] (ejml-index-range m)]
+           (let [^double x (mp/get-2d m i j)
+                 ^double y (mp/get-2d a i j)]
+             (mp/set-2d! r i j (f x y))))
+         r))
+    ([m f a more]
+       (let [r (apply new-ejml-matrix (api/shape m))
+             a (->> a (api/broadcast-like m) to-ejml-matrix)
+             more (map #(->> % (api/broadcast-like m) to-ejml-matrix) more)]
+         (doseq [[i j] (ejml-index-range m)]
+           (let [^double x (mp/get-2d m i j)
+                 ^double y (mp/get-2d a i j)
+                 zs (map #(mp/get-2d % i j) more)]
+             (mp/set-2d! r i j (apply f x y zs))))
+         r)))
+  ;;
+  (element-map!
+    ([m f]
+       (doseq [[i j] (ejml-index-range m)]
+         (let [^double x (mp/get-2d m i j)]
+           (mp/set-2d! m i j (f x))
+           m)))
+    ([m f a]
+       (let [a (->> a (api/broadcast-like m) to-ejml-matrix)]
+         (doseq [[i j] (ejml-index-range m)]
+           (let [^double x (mp/get-2d m i j)
+                 ^double y (mp/get-2d a i j)]
+             (mp/set-2d! m i j (f x y)))
+           m)))
+    ([m f a more]
+       (let [a (->> a (api/broadcast-like m) to-ejml-matrix)
+             more (map #(->> % (api/broadcast-like m) to-ejml-matrix) more)]
+         (doseq [[i j] (ejml-index-range m)]
+           (let [^double x (mp/get-2d m i j)
+                 ^double y (mp/get-2d a i j)
+                 zs (map #(mp/get-2d % i j) more)]
+             (mp/set-2d! m i j (apply f x y zs))
+             m)))))
+  ;;
+  (element-reduce
+    ([m f]
+       (reduce f (ejml-matrix-seq m)))
+    ([m f init]
+       (reduce f init (ejml-matrix-seq m))))
 )
 
 (mpi/register-implementation (new-ejml-matrix 2 2))
