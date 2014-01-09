@@ -177,7 +177,8 @@
         result (cond
                 ;; matrix-scalar operation
                 (and (contains? ops-map :with-scalar)
-                     (api/scalar? a))
+                     (= 0 (api/dimensionality a)) ;; true for ScalarWrappers too
+                     )
                 (let [scalar-op (:with-scalar ops-map)]
                   (scalar-op m (api/coerce m a)))
                 ;; matrix-vector operation
@@ -329,14 +330,14 @@
 
   mp/PCoercion
   (coerce-param [m p]
-    (if (api/scalar? p)
-      (double p)
-      (condp = (api/dimensionality p)
-        ;; create an array of doubles from 1D params
-        1 (->> p api/to-nested-vectors double-array)
-        ;; create a normal EJML matrix otherwise
-        2 (->> p api/to-nested-vectors to-ejml-matrix)
-        (arg-error "EJML supports only 2D matrices, but params' shape is " (api/shape p)))))
+    (condp = (api/dimensionality p)
+      ;; create a double
+      0 (->> p api/scalar double)
+      ;; create an array of doubles from 1D params
+      1 (->> p api/to-nested-vectors double-array)
+      ;; create a normal EJML matrix otherwise
+      2 (->> p api/to-nested-vectors to-ejml-matrix)
+      (arg-error "EJML supports only 2D matrices, but params' shape is " (api/shape p))))
 
   ;; EJML seems to be unable to build matrices from blocks, so we
   ;; convert to intermediate vector-based representation to handle
