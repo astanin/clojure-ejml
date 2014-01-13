@@ -510,7 +510,7 @@
 
   mp/PMutableFill
   (fill! [m v]
-    (CommonOps/fill m (double v))
+    (CommonOps/fill m (api/coerce m v))
     m)
 
   mp/PDoubleArrayOutput
@@ -731,6 +731,37 @@
        (reduce f (ejml-matrix-seq m)))
     ([m f init]
        (reduce f init (ejml-matrix-seq m))))
+
+  mp/PRowOperations
+  (swap-rows [m i j]
+    (let [r (api/clone m)
+          [_ cols] (api/shape m)]
+      (doseq [col (range cols)]
+        (mp/set-2d! r i col (mp/get-2d m j col))
+        (mp/set-2d! r j col (mp/get-2d m i col)))
+      r))
+  (multiply-row [m i k]
+    (let [r (api/clone m)
+          [_ cols] (api/shape m)]
+      (doseq [col (range cols)]
+        (mp/set-2d! r i col (* k (mp/get-2d m i col))))
+      r))
+  (add-row [m i j k]
+    "Returns a new matrix with row i added to row j times k"
+    (let [r (api/clone m)
+          [_ cols] (api/shape m)]
+      (doseq [col (range cols)]
+        (mp/set-2d! r i col
+                    (+ (mp/get-2d m i col)
+                       (* k (mp/get-2d m j col)))))
+      r))
+
+#_(defprotocol PRowSetting
+  "Protocol for row setting. Should set a dimension 0 (row) slice to thegiven row value."
+  (set-row [m i row])
+  (set-row! [m i row]))
+
+
 )
 
 (mpi/register-implementation (new-ejml-matrix 2 2))
