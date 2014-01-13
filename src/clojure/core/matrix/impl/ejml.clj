@@ -468,12 +468,45 @@
       (CommonOps/extractDiag m d)
       (.data d)))
 
-  ;; TODO: understand what assign-array! should do and implement it too
   mp/PAssignment
   (assign! [m v]
-    (if (api/scalar? v)
+    (if (= 0 (api/dimensionality v))
       (mp/fill! m v)
-      (unsupported-error "non-scalar assignment")))
+      ;; else
+      (let [vm (api/broadcast-like m v)]
+        (api/emap! (fn [_ rhs] rhs) m vm)
+        m)))
+  (assign-array!
+    ([m arr]
+       (let [^doubles arr (api/coerce m arr)]
+         (if (= (api/ecount m) (alength arr))
+           (do
+             (set! (.data m) arr)
+             m)
+           ;; else
+           (arg-error "array is not the same size as the matrix: "
+                      "matrix shape=" (api/shape m) " "
+                      "array length=" (alength arr)))))
+    ([m arr start length]
+       (let [^doubles arr (api/coerce m arr)]
+         (cond
+          (or (< start 0)
+              (> (+ start length) (alength arr)))
+          (arg-error "array slice is out of bounds: "
+                     "array length=" (alength arr) " "
+                     "start=" start " "
+                     "length=" length)
+          ;;
+          (not= (api/ecount m) length)
+          (arg-error "array slice is not the same size as the matrix: "
+                     "matrix shape=" (api/shape m) " "
+                     "slice length=" length)
+          ;;
+          :normally
+          (let [mdata (.data m)]
+            (doseq [i (range 0 length)]
+              (aset mdata (int i) (double (aget arr (+ start i)))))
+            m)))))
 
   mp/PMutableFill
   (fill! [m v]
