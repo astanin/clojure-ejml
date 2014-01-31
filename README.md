@@ -67,7 +67,7 @@ user=> (trace m)
 EJML is a fine linear algebra library. Core Matrix API lacks many of
 linear algebra operations.  This projects intends to extend the Core
 Matrix API.
-`clojure.core.matrix.linalg`](src/clojure/core/matrix/linalg.clj)
+[`clojure.core.matrix.linalg`](src/clojure/core/matrix/linalg.clj)
 namespace will be the playground to develop extensions.
 
 
