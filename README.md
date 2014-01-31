@@ -10,6 +10,16 @@ EJML is likely to be slower than native linear algebras, but it is good enough f
 
 [ejml]: https://code.google.com/p/efficient-java-matrix-library/
 
+## Installation
+
+The library is not quite for the first release to Clojars yet.
+To install it, clone this repository, and run `lein install` to install it locally.
+Add
+
+    [clojure-ejml "0.18.0.1-SNAPSHOT"]
+
+to the list of `:dependencies` in you `project.clj`.
+
 
 ## Usage
 
