@@ -75,7 +75,7 @@
 
 
 (defn from-ejml-matrix
-  "Converts an EJML DenseMatrix64F to a Clojure vector or a vector or vectors."
+  "Converts an EJML DenseMatrix64F to a Clojure vector or a vector of vectors."
   [^DenseMatrix64F m]
   (if (ejml-1d? m)
     (into [] (.getData m))  ; 1D matrix to a simple vector
@@ -93,28 +93,27 @@
     - a sequence to select a contiguous range of rows or columns,
                  e.g. [1 4] to select 2nd, 3rd, 4th, and 5th rows (columns).
   "
-  [m row-or-range column-or-range]
-  (let [[rows cols]       (api/shape m)
-        row-range         (if row-or-range
-                            (if (sequential? row-or-range) row-or-range [row-or-range])
-                            ;; all rows otherwise
-                            [0 (- rows 1)])
-        [min-row max-row] (apply (juxt min max) row-range)
-        min-row           (max min-row 0)
-        max-row           (min max-row (- rows 1))
-        column-range      (if column-or-range
-                            (if (sequential? column-or-range) column-or-range [column-or-range])
-                            ;; all columns otherwise
-                            [0 (- cols 1)]
-                            )
-        [min-col max-col] (apply (juxt min max) column-range)
-        min-col           (max min-col 0)
-        max-col           (min max-col (- cols 1))
-        m-iter            (MatrixIterator. m true min-row min-col max-row max-col)
-        n                 (* (+ 1 (- max-row min-row)) (+ 1 (- max-col min-col)))]
-    (for [_ (range n)]
-      (.next m-iter))))
-
+  ([m] (ejml-submatrix-seq m nil nil))
+  ([m row-or-range column-or-range]
+   (let [range-or-all (fn [x default]
+                        (if x
+                          (if (sequential? x)
+                            x
+                            [x])
+                          default))
+         [rows cols] (api/shape m)
+         row-range (range-or-all row-or-range [0 (- rows 1)])
+         [min-row max-row] (apply (juxt min max) row-range)
+         min-row (max min-row 0)
+         max-row (min max-row (- rows 1))
+         column-range (range-or-all column-or-range [0 (- cols 1)])
+         [min-col max-col] (apply (juxt min max) column-range)
+         min-col (max min-col 0)
+         max-col (min max-col (- cols 1))
+         m-iter (MatrixIterator. m true min-row min-col max-row max-col)
+         n (* (+ 1 (- max-row min-row)) (+ 1 (- max-col min-col)))]
+     (for [_ (range n)]
+       (.next m-iter)))))
 
 (defn ejml-matrix-seq
   "Returns a row-major sequence of all matrix elements of m."
@@ -134,14 +133,18 @@
     - a number   to select just one row or just one column respectively
     - a sequence to select a contiguous range of rows or columns,
                  e.g. [1 4] to select 2nd, 3rd, 4th, and 5th rows (columns).
+  Example:
+  (ejml-rows-seq (to-ejml-matrix (partition 5 (range 25))) [0 3] [0 3])
   "
   ([m]
      (let [elements-seq (ejml-matrix-seq m)
-           [rows cols]  (api/shape m)]
+           [_ cols]  (api/shape m)]
        (partition-all cols elements-seq)))
-  ([m row-or-range columns-or-range]
-     (let [elements-seq (ejml-submatrix-seq m row-or-range columns-or-range)
-           cols         (if (sequential? columns-or-range) (count columns-or-range) 1)]
+  ([m row-or-range column-or-range]
+     (let [elements-seq (ejml-submatrix-seq m row-or-range column-or-range)
+           cols         (if (sequential? column-or-range)
+                          (inc (- (second column-or-range) (first column-or-range)))
+                          1)]
        (partition-all cols elements-seq))))
 
 
